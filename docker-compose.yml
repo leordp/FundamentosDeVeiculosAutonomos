@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  coppeliasim:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: coppeliasim_container
+    volumes:
+      - ./src:/home/fva_ws/src:cached   # monta o src local no container
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw   # GUI sharing
+      - ./data:/home/fva_ws/data
+      - ./test:/home/fva_ws/test
+    ports:
+      - "19997:19997"        # Remote API classic
+      - "23000-23050:23000-23050"  # Remote API ZMQ
+    environment:
+      - DISPLAY=${DISPLAY}   # forward display se rodar com GUI
+      - QT_X11_NO_MITSHM=1
+    network_mode: bridge
+    stdin_open: true
+    tty: true
+    privileged: true   # necessário para GUI
+    command: /bin/sh

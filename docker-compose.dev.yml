@@ -1,0 +1,5 @@
+services:
+  coppelia_fva:
+    command: sleep infinity
+    restart: "no"
+    #volumes:
