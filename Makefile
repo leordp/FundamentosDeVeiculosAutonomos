@@ -39,7 +39,6 @@ down: ## Derrubar containers e redes
 logs: ## Ver logs do container
 	docker compose logs -f $(NAME)
 
-clean: ## Limpar containers, redes e volumes
-	@echo "[INFO] Limpando containers, imagens e volumes..."
-	docker compose down --volumes --remove-orphans
-	docker system prune -f --volumes
+remove: ## Limpar containers, redes e volumes
+	@echo "[INFO] Limpando container..."
+	docker rm $(NAME)
