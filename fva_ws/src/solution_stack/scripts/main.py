@@ -10,7 +10,7 @@
 import sys
 sys.path.append("/home/fva_ws/src/fundamentos_veiculos_autonomos/simulador")
 
-import class_car as cp
+import class_car as cp # type: ignore
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
