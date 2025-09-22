@@ -1,40 +1,45 @@
-# Makefile for managing the Docker containers
+# Makefile para gerenciar containers Docker do projeto
 
-IMAGE = veiculosautonomos-coppeliasim
+IMAGE ?= veiculosautonomos-coppeliasim
+NAME  ?= coppeliasim_container
 SHELL := bash
-NAME := coppeliasim_container
 
-.PHONY: build up down clean help
+.PHONY: help build up up-d bash stop down clean logs
 
-.PHONY: help
-help: ## Show usage information for this Makefile.
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+## -------------------------------------------------------------------
+## 🔹 Comandos principais
+## -------------------------------------------------------------------
 
-.PHONY: build
-build:  ## build the Docker image
+help: ## Mostrar ajuda
+	@echo -e "\nComandos disponíveis:\n"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@echo ""
+
+build: ## Construir a imagem Docker
+	@echo "[INFO] Buildando imagem $(IMAGE)..."
 	docker compose build
 
-.PHONY: shell
-shell: ## Open a shell in the Docker container
-	docker exec -it ${NAME} bash
-
-.PHONY: run
-run: ## Run the Docker container
-	docker compose up --remove-orphans
-
-.PHONY: run-detached
-run-detached: ## Run the Docker container (detached mode)
+up: ## Subir container em background (detached)
+	@echo "[INFO] Subindo container $(NAME) em background..."
 	docker compose up -d --remove-orphans
 
-.PHONY: dev
-dev: ## Run the Docker container but don't load CoppeliaSim
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --remove-orphans && docker exec -it ${NAME} bash
+shell: ## Entrar no container com bash
+	@echo "[INFO] Entrando no container $(NAME)..."
+	docker exec -it $(NAME) bash
 
-.PHONY: stop
-stop: ## Stop the Docker container
-	docker kill ${NAME} || true
+stop: ## Parar o container
+	@echo "[INFO] Parando container $(NAME)..."
+	docker stop $(NAME) || true
 
-.PHONY: clean
-clean: ## Clean up Docker containers and images
+down: ## Derrubar containers e redes
+	@echo "[INFO] Derrubando stack Docker..."
+	docker compose down --remove-orphans
+
+logs: ## Ver logs do container
+	docker compose logs -f $(NAME)
+
+clean: ## Limpar containers, redes e volumes
+	@echo "[INFO] Limpando containers, imagens e volumes..."
 	docker compose down --volumes --remove-orphans
 	docker system prune -f --volumes

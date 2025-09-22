@@ -1,0 +1,17 @@
+name: fva
+root: ../src/solution_stack/scripts
+startup_window: SolutionStack
+
+windows:
+  - CoppeliaSim:
+      layout:
+      panes:
+        - /opt/CoppeliaSim/coppeliaSim.sh \
+            -GpreferredSandboxLang=python \
+            -GzmqRemoteApi.rpcPort=23000 \
+            -GzmqRemoteApi.keepServerAlive=1 \
+            $SIM_FILE
+  - SolutionStack:
+      layout: tiled
+      panes:
+        - python3 main.py
