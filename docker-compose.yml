@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  coppeliasim:
+    build:
+      context: .
+      dockerfile: ./fva_ws/dockerfiles/Dockerfile
+    container_name: coppeliasim_container
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw   # GUI sharing
+      - ./fva_ws/src:/home/fva_ws/src
+      - ./fva_ws/startup:/home/fva_ws/startup
+      - ./fva_ws/startup/.tmux.conf.:/home/.tmux.conf
+    environment:
+      - DISPLAY=${DISPLAY}   # forward display se rodar com GUI
+      - QT_X11_NO_MITSHM=1
+    network_mode: host
+    stdin_open: true
+    tty: true
+    privileged: true   # necessário para GUI
+    command: /bin/sh

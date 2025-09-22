@@ -1,0 +1,3 @@
+[submodule "fva_ws/src/fundamentos_veiculos_autonomos"]
+	path = fva_ws/src/fundamentos_veiculos_autonomos
+	url = https://github.com/GTI-UFMG/fundamentos_veiculos_autonomos.git
