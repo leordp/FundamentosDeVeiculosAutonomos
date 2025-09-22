@@ -1,0 +1,24 @@
+filepath = 'Log.csv';
+
+data = readtable(filepath);
+dataArray = table2array(data);
+
+t = dataArray(:,1);
+u = dataArray(:,3);
+v = dataArray(:,2);
+
+polos = pole(tf1);
+zeros = zero(tf1);
+ganho_dc = dcgain(tf1);
+
+Tau = 0.25;
+
+s = tf('s');
+
+G = 70.181*(s+0.0095)/(s+0.0008); 
+
+Gc = 1/G*Tau*s
+
+polos = pole(Gc)
+zeros = zero(Gc)
+ganho_dc = dcgain(Gc)
