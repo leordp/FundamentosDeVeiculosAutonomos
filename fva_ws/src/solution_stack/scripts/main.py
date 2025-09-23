@@ -47,8 +47,12 @@ plt.rcParams['figure.figsize'] = (8, 6)
 # ============================
 # UTILIDADES
 # ============================
+def time_to_stop(v)
+    return v/DEACCELERATION
+
 def distance_to_stop(v):
-    return (float(v) ** 2) / (2.0 * DEACCELERATION)
+    time_to_stop = time_to_stop(v)
+    return v * time_to_stop - DEACCELERATION*(time_to_stop ** 2) / 2.0
 
 def crash_supervisor(car):
     sonar = float(car.getDistance())
