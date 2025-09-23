@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: ./fva_ws/dockerfiles/Dockerfile
     container_name: coppeliasim_container
+    devices:
+      - /dev:/dev
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw   # GUI sharing
       - ./fva_ws/src:/home/fva_ws/src
