@@ -38,66 +38,46 @@ parameters = {	'car_id'	: 0,
 ########################################
 
 # --- controller parameters ---
-KP = 7      # proportional gain
-KI = 0.3    # integral gain
-KBW = 0.2     # back-calculation gain
-K = 1       # plant gain (throttle->velocity)
-TAU = 2.6e-8     # plant time constant [s]
+KP = 5      # proportional gain
+KI = 8    # integral gain
+KBW = KP/KI     # AntiWindup gain
+KFF = 0.01       # FeedForward Gain
 
-U_MAX = 10.0   # max throttle
+TS = 0.05
+
+U_MAX = 1.0   # max throttle
 DT = 0.05     # controller timestep [s]
-
-# predictive limiter
-PRED_HORIZON = 10   # prediction horizon [s]
-DELTA = 0.05         # overshoot margin [m/s]
 
 M = 6.3
 
-R_X = 2.3478
+R_X = 0.57
 DEACCELERATION = R_X/M
 
-i_error = 0
+prev_error = 0
+prev_control = 0
 CarOff = False
 
 def PID(car, ref):
-	"""
-	PI controller with feedforward, anti-windup, and predictive limiter
-	for throttle-only car model.
-	"""
-	global i_error
 
-	v = car.getVel()[0]  # current velocity
-	error = ref - v
-	i_error += error
-	# feedforward term
-	u_ff = R_X/M
+	global prev_control,prev_error
 
-	# PI unsaturated 
-	u_pi = KP * error + KI * i_error
+	## Descrete PI control implementatio
 
-	# candidate command
-	u_cand = u_ff + u_pi
-	u_sat = max(0.0, min(u_cand, U_MAX))  # actuator limits
+	error = ref - car.getVel()[0]
 
-	# predictive limiter
-	predicted_velocity = v + PRED_HORIZON*(u_sat - R_X)
-	print(f"Cadidate to accel {u_cand} Predicted Velocity {predicted_velocity}")
+	u = prev_control + (KP + KI*TS/2)*error + (-KP+KI*TS/2)*prev_error
 
-	if(predicted_velocity >= (ref + DELTA) * error):
-		u_allow = (u_sat - v * K)
-		u_allow = max(0.0, min(u_allow, U_MAX))
-	else:
-		u_allow = U_MAX
+	# Feedforward
 
-	print(f"Allowed accel {u_allow}")
+	u += R_X*KFF
 
-	u = min(u_sat, u_allow)  # final command
+	# Anti Windup
 
-	# # anti-windup (back-calculation)
-	if u < 0.01:
-		i_error = 0
+	u_saturated = max(0.0,min(U_MAX,u))
+	u += KBW*(u_saturated-u)
 
-	print(f"Integral error {i_error}")
+	prev_control = u
+	prev_error = error
 
 	return u
 
@@ -120,7 +100,7 @@ def TimeToStop(V):
 
 def DistanceToStop(V):
 	time_to_stop = TimeToStop(V)
-	return DEACCELERATION*time_to_stop^2/2
+	return V*time_to_stop - DEACCELERATION*time_to_stop**2/2
 
 #Function to check if the car will crash
 #Compares the distance read from the sensor with the predicted stopping distance
@@ -129,18 +109,31 @@ def CrashSupervisor(car):
 	v_x = car.getVel()[0]
 	stopping_distance = DistanceToStop(v_x)
 
-	if stopping_distance < sonar_reading:
+	print(f"Stopping Distance {stopping_distance} Vs Sonar Reading {sonar_reading}")
+
+	if stopping_distance > sonar_reading and sonar_reading < 4.0:
 		return True
 
 	return False
 
-
+Crash = False
 def control_func(car):
 
+	global Crash
 	# seta direcao
 	# car.setSteer(np.deg2rad(2.0*np.sin(car.t)))
 
-	u = PID(car,1)
+	if Crash:
+		u = 0
+	else:
+		u = PID(car,1)
+
+	if CrashSupervisor(car):
+		print("CRASH!!!!!!")
+		u = 0
+		Crash = True
+
+	# u = Costdown(car)
 
 	car.setU(u)
 
@@ -153,8 +146,6 @@ def control_func(car):
 	# 	car.setVel(4)
 	# else:
 	# 	car.setVel(5)
-
-	print('Vel: ', car.getVel())
 	return u
 		
 ########################################
@@ -229,7 +220,7 @@ def run(parameters):
 	if parameters['save']:
 		car.save(parameters['logfile'])
 
-	with open('CoastdownLog.csv', 'w', newline='') as csvfile:
+	with open('CrashWarningTest.csv', 'w', newline='') as csvfile:
 		writer = csv.writer(csvfile)
 		writer.writerow(["t","v","u"])
 		data_rows = np.column_stack((t,v,accel))
