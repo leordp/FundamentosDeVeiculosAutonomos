@@ -12,6 +12,7 @@ import class_car as cp  # type: ignore
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from Controller import Controller
 
 # ============================
 # FLAGS DE CONFIGURAÇÃO
@@ -33,6 +34,26 @@ parameters = {
     "logfile": LOG_DIR,
 }
 
+PARAM_LEO = {
+	"KBW": 1.5,
+	"WN" : 1,
+	"ZETA": 1,
+	"KFF": 0.05,
+}
+
+PARAM_YAN = {
+	"KP": 5,
+	"KI": 2,
+	"KBW": 0
+}
+
+PARAM_GRUPO = {
+	"KP": 5,
+	"KI": 3,
+	"KBW": 0,
+}
+
+
 TS = 0.05
 U_MAX, U_MIN = 1.0, 0.0
 M = 6.3
@@ -47,12 +68,12 @@ plt.rcParams['figure.figsize'] = (8, 6)
 # ============================
 # UTILIDADES
 # ============================
-def time_to_stop(v)
+def time_to_stop(v):
     return v/DEACCELERATION
 
 def distance_to_stop(v):
-    time_to_stop = time_to_stop(v)
-    return v * time_to_stop - DEACCELERATION*(time_to_stop ** 2) / 2.0
+    t_to_stop = time_to_stop(v)
+    return v * t_to_stop - DEACCELERATION*(t_to_stop ** 2) / 2.0
 
 def crash_supervisor(car):
     sonar = float(car.getDistance())
@@ -94,21 +115,24 @@ class ControllerV2:
         self.u_prev, self.e_prev = u_aw, e
         return u_sat
 
-def build_controller(name):
-    return (ControllerV1(), "v1") if name == "v1" else (ControllerV2(), "v2")
+def build_controller(car):
+    return Controller(car,PARAM_GRUPO)
+    # return (ControllerV1(), "v1") if name == "v1" else (ControllerV2(), "v2")
 
 # ============================
 # LOOP PRINCIPAL
 # ============================
 def run(sim_params, controller_name, v_ref=1.0):
     os.makedirs(LOG_DIR, exist_ok=True)
-    ctrl, tag = build_controller(controller_name)
-    print(f"[INFO] Controlador: {tag} | Crash: {'ON' if ENABLE_CRASH_SUPERVISOR else 'OFF'}")
 
     car = cp.Car(sim_params)
     car.startMission()
 
     t_hist, v_hist, t_u_hist, u_hist = [], [], [], []
+
+    ctrl = build_controller(car)
+    tag = "Matlab"
+    print(f"[INFO] Controlador: {tag} | Crash: {'ON' if ENABLE_CRASH_SUPERVISOR else 'OFF'}")
 
     try:
         car.setVel(0.0)
@@ -117,7 +141,7 @@ def run(sim_params, controller_name, v_ref=1.0):
             if ENABLE_CRASH_SUPERVISOR and crash_supervisor(car):
                 u = 0.0
             else:
-                u = ctrl.step(float(car.getVel()[0]), v_ref)
+                u = ctrl.control(v_ref)
             car.setU(u)
 
             # históricos

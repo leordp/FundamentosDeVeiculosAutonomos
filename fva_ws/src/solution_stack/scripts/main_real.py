@@ -11,16 +11,21 @@ import sys
 sys.path.append("/home/alunos/Desktop/fva2025/GrupoDoRaviEDoYan/fva_ws/src/fundamentos_veiculos_autonomos/veiculo_real")
 
 import class_car as cp
+import class_ultrasonic as cu
+
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import threading
 import time
+from Controller import Controller
 
 
 # cria carrinho
 car = cp. Car()
 car.startMission()
+
+ultrassonic = cu.Ultrasonic()
 
 terminar = False
 
@@ -37,112 +42,57 @@ refste = np.deg2rad(0.0)
 
 ########################################
 # thread de controle de velocidade
+PARAM_LEO = {
+	"KBW": 1.5,
+	"WN" : 1,
+	"ZETA": 1,
+	"KFF": 0.05,
+}
+
+PARAM_YAN = {
+	"KP": 5,
+	"KI": 2,
+	"KBW": 0
+}
+
+PARAM_GRUPO = {
+	"KP": 5,
+	"KI": 3,
+	"KBW": 0,
+}
+
+R_X = 0.6616134
+DEACCELERATION = max(R_X / M, 1e-6)
+ENABLE_CRASH_SUPERVISOR = True # ativa/desativa crash detector por sonar
+SONAR_LIMIT = 4.0              # limite do sonar em metros
+SAFETY_FACTOR = 1.2            # >=1.0 -> mais conservador
+M = 5.2
+
+control_mode = "matlab" #Yan = "tustin" #Leo
+
+control = Controller(car,PARAM_GRUPO)
 
 
-# --- controller parameters ---
+def time_to_stop(v):
+    return v/DEACCELERATION
 
-M = 6.3          # mass [kg]
+def distance_to_stop(v):
+    time_to_stop = time_to_stop(v)
+    return v * time_to_stop - DEACCELERATION*(time_to_stop ** 2) / 2.0
 
-WN = 1  # Natural Frequency
-ZETA = 1 # Damping Ratio
-
-KI = M
-KP = 2 * ZETA * KI
-
-
-KBW = 1.5    # Anti-windup back-calculation gain
-KFF = 0.05       # Feedforward gain
-
-TS = 0.05        # controller sample time [s]
-U_MAX = 1.0      # throttle upper limit
-U_MIN = 0.0      # throttle lower limit
-
-
-R_X = 0.6616134  # rolling resistance force [N]
-DEACCELERATION = R_X / M
-
-# state variables
-prev_error = 0.0
-prev_control = 0.0
-
-# --- controller parameters ---
-KP = 5  # proportional gain
-KI = 2  # integral gain
-KBW = 0     # back-calculation gain
-K = 1       # plant gain (throttle->velocity)
-TAU = 2.6e-8     # plant time constant [s]
-
-U_MAX = 1.0   # max throttle
-DT = 0.05     # controller timestep [s]
-
-# predictive limiter
-PRED_HORIZON = 10   # prediction horizon [s]
-DELTA = 0.05         # overshoot margin [m/s]
-
-M = 6.3
-
-R_X = 2.3478
-DEACCELERATION = R_X/M
-
-i_error = 0
-CarOff = False
-erro_anterior = 0
-u_anterior = 0
-
-erro_anterior = 0.0
-u_anterior    = 0.0
-i_aw          = 0.0  # estado de anti-windup (opcional se quiser separar)
-
-def PID(car, ref):
-    global erro_anterior, u_anterior, i_aw
-
-    v = car.getVel()[0]
-    e = ref - v
-
-    # incremento não saturado
-    delta_u = KP * (e - erro_anterior) + KI * DT * e
-    u_unsat = u_anterior + delta_u
-
-    # saturação
-    U_MIN = 0.0
-    u_sat = float(np.clip(u_unsat, U_MIN, U_MAX))
-
-    # retrocálculo (empurra o erro de saturação pro integrador incremental)
-    # equivalente a somar KBW*(u_sat - u_unsat) no estado "integral"
-    u_corr = u_unsat + KBW * (u_sat - u_unsat)
-    # OBS: a saída aplicada é u_sat, não u_corr
-
-    # atualizações
-    erro_anterior = e
-    u_anterior    = u_sat  # guarde o que foi APLICADO (saturado)
-
-    return u_sat
-
-def PID_LEO(car, ref):
-    global prev_control, prev_error
-
-    # error
-    error = ref - car.getVel()[0]
-
-    # --- Discrete PI in velocity form (Tustin) ---
-    u_unsat = prev_control + (KP + KI * TS / 2.0) * error + (-KP + KI * TS / 2.0) * prev_error
-
-    # Feedforward compensation for rolling resistance ---
-    # u_unsat += R_X * KFF
-
-    # -Saturation
-    u_sat = max(U_MIN, min(U_MAX, u_unsat))
-
-    # Anti-windup 
-    u_aw = u_unsat + KBW * (u_sat - u_unsat)
-
-    # update states
-    prev_control = u_aw
-    prev_error = error
-
-    return u_sat 
+def crash_supervisor():
+	global car, ultrassonic
+    sonar = float(ultrassonic.getDistance())
+    vx = float(car.getVel()[0])
+    s_stop = SAFETY_FACTOR * distance_to_stop(vx)
+    trigger = (s_stop > sonar) and (sonar < SONAR_LIMIT)
+    if trigger:
+        print(f"[CRASH] t={car.t:.2f}s | sonar={sonar:.2f} m | v={vx:.2f} m/s -> freio!")
+    return trigger
 
 
+
+safety_triger = False
 
 def control_func():
 	
@@ -150,11 +100,24 @@ def control_func():
 	global refste
 	global refvel
 	global u_traj
+	global control
+
+	while car.getVel[0] == 0:
+		pass
 	
+	print("Car connected, initializing controller")
+
 	while not terminar:
 		# lê sensores
 		car.step()
 		
+		#Crash ADAS
+		if (crash_supervisor()):
+			car.setU(0.0)
+			terminar = True
+			break
+		
+
 		# seta direcao
 		# car.setSteer(refste)
 		
@@ -162,9 +125,10 @@ def control_func():
 		# atua
 		# if 0.0 
 		#car.setVel(refvel)
-		
-		if 0.0 < car.t < 60.0:
-			u = PID(car, 1.0)
+		if safety_triger:
+			u = 0
+		elif 0.0 < car.t < 60.0:
+			u = control.control(1.0,mode=control_mode)
 		else:
 			u = 0.0
 		
