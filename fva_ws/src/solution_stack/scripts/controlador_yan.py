@@ -28,7 +28,7 @@ plt.rcParams['figure.figsize'] = (8,6)
 
 # Globais
 parameters = {	'car_id'	: 0,
-				'ts'		: 30.0, 			# tempo da simulacao
+				'ts'		: 100.0, 			# tempo da simulacao
 				'save'		: True,
 				'logfile'	: 'logs/',
 			}
@@ -37,35 +37,26 @@ parameters = {	'car_id'	: 0,
 # thread de controle de velocidade
 ########################################
 
-# --- controller parameters ---
+# --- controller longitudinal ---
 KP = 2.31998  # proportional gain
 KI = 1.12637  # integral gain
 KBW = KP/KI     # back-calculation gain
-K = 1       # plant gain (throttle->velocity)
-TAU = 2.6e-8     # plant time constant [s]
 
-U_MAX = 1.0   # max throttle
-DT = 0.05     # controller timestep [s]
+U_MIN = 0.0
+U_MAX = 1.0
 
-# predictive limiter
-PRED_HORIZON = 10   # prediction horizon [s]
-DELTA = 0.05         # overshoot margin [m/s]
-
-M = 6.3
-
-R_X = 2.3478
-DEACCELERATION = R_X/M
-
-i_error = 0
-CarOff = False
-erro_anterior = 0
-u_anterior = 0
+DT = 0.05
 
 erro_anterior = 0.0
 u_anterior    = 0.0
-i_aw          = 0.0  # estado de anti-windup (opcional se quiser separar)
+i_aw          = 0.0 
 
-def PID(car, ref):
+KP_STANLEY = 1e-3
+
+
+erro_lateral = 0.0
+
+def ControladorLongitudinal(car, ref):
     global erro_anterior, u_anterior, i_aw
 
     v = car.getVel()[0]
@@ -76,7 +67,6 @@ def PID(car, ref):
     u_unsat = u_anterior + delta_u
 
     # saturação
-    U_MIN = 0.0
     u_sat = float(np.clip(u_unsat, U_MIN, U_MAX))
 
     # retrocálculo (empurra o erro de saturação pro integrador incremental)
@@ -89,6 +79,24 @@ def PID(car, ref):
     u_anterior    = u_sat  # guarde o que foi APLICADO (saturado)
 
     return u_sat
+
+def ControladorStanley(car):
+    global erro_lateral, KP_STANLEY
+
+    v = car.getVel()[0]
+    print('yaw', car.getYaw())
+	
+    direcao_atual = np.deg2rad(car.getYaw())
+
+
+    direcao_desejada = np.arctan2((KP_STANLEY * erro_lateral)/v, 1.0)
+	
+    direcao_desejada = np.clip(direcao_desejada, np.deg2rad(-20), np.deg2rad(20))
+
+    return direcao_desejada
+
+def CriaTrajetoria(car):
+	pass
 
 def Costdown(car):
 	global CarOff
@@ -103,41 +111,24 @@ def Costdown(car):
 		u = 0.0
 	return u 
 
-# Calculates time that the car will take to stop
-def TimeToStop(V):
-	return V/DEACCELERATION
-
-def DistanceToStop(V):
-	time_to_stop = TimeToStop(V)
-	return DEACCELERATION*time_to_stop^2/2
-
-#Function to check if the car will crash
-#Compares the distance read from the sensor with the predicted stopping distance
-def CrashSupervisor(car):
-	sonar_reading = car.getDistance()
-	v_x = car.getVel()[0]
-	stopping_distance = DistanceToStop(v_x)
-
-	if stopping_distance < sonar_reading:
-		return True
-
-	return False
-
-
 def control_func(car):
 
 	# seta direcao
 	# car.setSteer(np.deg2rad(2.0*np.sin(car.t)))
 
+
+
 	# u = PID(car,1)
 
 	# car.setU(u)
 
-	if car.t < 2.0:
+	if 0.01 > car.t:
 		u = 0.0
 	else:
-		u = PID(car,1)
+		u = ControladorLongitudinal(car,1)
+		delta =  ControladorStanley(car)
 	car.setU(u)
+	car.setSteer(delta)
 
 	# if car.getVel()[0] < 3:
 	# 	car.setVel(4)
@@ -150,16 +141,75 @@ def control_func(car):
 ########################################
 # thread de visão
 ########################################
-def vision_func(car):
-		
-	# pega imagem
-	image = car.getImage()
-	
-	# ultrasom
-	dist = car.getDistance()
-	print('Ultrasonic distance: ', np.round(dist,2))
-	
-	return image
+def vision_func(car, DEBUG=False):
+    # captura imagem e faz cópia mutável
+    image = np.array(car.getImage(), copy=True)
+
+    # === CORRIGE A ORIENTAÇÃO ===
+    # Se a imagem estiver invertida verticalmente, ative o flip
+    image = cv2.flip(image, 0)  # desative se já estiver correta
+
+    # converte RGB → HSV
+    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+
+    # === CONFIGURAÇÃO DA COR DA LINHA (amarela) ===
+    lower = np.array([20, 100, 100])
+    upper = np.array([40, 255, 255])
+    mask = cv2.inRange(hsv, lower, upper)
+
+    # === TRATAMENTO DA MÁSCARA ===
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+    # === ENCONTRA CONTORNOS ===
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cx_line, cy_line = None, None
+    h, w = mask.shape
+
+    if contours:
+        largest = max(contours, key=cv2.contourArea)
+        M = cv2.moments(largest)
+        if M["m00"] > 0:
+            cx_line = int(M["m10"] / M["m00"])
+            cy_line = int(M["m01"] / M["m00"])
+            # desenha o contorno e o centro da linha
+            cv2.drawContours(image, [largest], -1, (255, 255, 0), 2)
+            cv2.circle(image, (cx_line, cy_line), 6, (255, 0, 0), -1)
+
+    # === CENTRO DA CÂMERA ===
+    cx_cam = w // 2
+    cv2.line(image, (cx_cam, 0), (cx_cam, h), (0, 255, 0), 2)
+
+    # === ERRO LATERAL ===
+    if cx_line is not None:
+        erro_px = cx_line - cx_cam
+        erro_norm = erro_px / (w / 2)
+        print(f"Erro lateral: {erro_px:.1f} px  ({erro_norm:.2f} relativo)")
+    else:
+        erro_px = 0
+        erro_norm = 0
+        print("⚠️ Linha não detectada")
+
+    # === ULTRASSOM ===
+    dist = car.getDistance()
+    print('Ultrasonic distance: ', np.round(dist, 2))
+
+    # === DEBUG VISUAL (opcional) ===
+    if DEBUG:
+        mask_color = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+        debug_top = np.hstack((image, mask_color))
+        debug = np.vstack((debug_top, np.zeros_like(debug_top)))
+        cv2.imshow("Camera / Mask / ROI", cv2.cvtColor(debug, cv2.COLOR_RGB2BGR))
+        cv2.waitKey(1)
+
+    global erro_lateral
+    erro_lateral = erro_px
+
+    return cv2.flip(image, 0)
+
+
+
 				
 ########################################
 # executa controle

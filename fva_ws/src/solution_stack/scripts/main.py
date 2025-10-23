@@ -18,7 +18,7 @@ from Controller import Controller
 # FLAGS DE CONFIGURAÇÃO
 # ============================
 CONTROLLER = "v2"              # "v1" (PI incremental) ou "v2" (PI Tustin)
-ENABLE_CRASH_SUPERVISOR = True # ativa/desativa crash detector por sonar
+ENABLE_CRASH_SUPERVISOR = False # ativa/desativa crash detector por sonar
 SONAR_LIMIT = 4.0              # limite do sonar em metros
 SAFETY_FACTOR = 1.2            # >=1.0 -> mais conservador
 SAVE_LOG = True
@@ -48,8 +48,8 @@ PARAM_YAN = {
 }
 
 PARAM_GRUPO = {
-	"KP": 5,
-	"KI": 3,
+	"KP": 2.3,
+	"KI": 1.2,
 	"KBW": 0,
 }
 

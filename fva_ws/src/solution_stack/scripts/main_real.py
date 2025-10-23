@@ -82,14 +82,13 @@ def distance_to_stop(v):
 
 def crash_supervisor():
 	global car, ultrassonic
-    sonar = float(ultrassonic.getDistance())
-    vx = float(car.getVel()[0])
-    s_stop = SAFETY_FACTOR * distance_to_stop(vx)
-    trigger = (s_stop > sonar) and (sonar < SONAR_LIMIT)
-    if trigger:
-        print(f"[CRASH] t={car.t:.2f}s | sonar={sonar:.2f} m | v={vx:.2f} m/s -> freio!")
-    return trigger
-
+	sonar = float(ultrassonic.getDistance())
+	vx = float(car.getVel()[0])
+	s_stop = SAFETY_FACTOR * distance_to_stop(vx)
+	trigger = (s_stop > sonar) and (sonar < SONAR_LIMIT)
+	if trigger:
+		print(f"[CRASH] t={car.t:.2f}s | sonar={sonar:.2f} m | v={vx:.2f} m/s -> freio!")
+	return trigger
 
 
 safety_triger = False
@@ -102,8 +101,7 @@ def control_func():
 	global u_traj
 	global control
 
-	while car.getVel[0] == 0:
-		pass
+	time.sleep(2.0)
 	
 	print("Car connected, initializing controller")
 
@@ -125,12 +123,17 @@ def control_func():
 		# atua
 		# if 0.0 
 		#car.setVel(refvel)
-		if safety_triger:
-			u = 0
-		elif 0.0 < car.t < 60.0:
-			u = control.control(1.0,mode=control_mode)
-		else:
-			u = 0.0
+
+		# if safety_triger:
+		# 	u = 0
+		# elif 0.0 < car.t < 15.0:
+		# 	u = control.control(1.0,mode=control_mode)
+		# else:
+		# 	u = 0.0
+
+		print(ultrassonic.getDistance()) 
+
+
 		
 	#	if 2.0 < car.t < 5.0:
 	#		u = 1.0

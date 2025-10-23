@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
 # ------------------ Parâmetros ------------------
-npz_path = "controlador_kp5_ki3.npz"
-t_start = 15.2
-t_end   = 16.5
+npz_path = "logs/car0.npz"
+t_start = 10.0
+t_end   = 20.0
 
 # ------------------ Carrega NPZ ------------------
 data = np.load(npz_path, allow_pickle=True)
@@ -42,17 +42,26 @@ v_model = linear_func(t_model, a_fit, b_fit)
 
 # ------------------ Plotagem ------------------
 plt.figure(figsize=(10,5))
-plt.scatter(t, v, s=10, label='Todos os dados (NPZ)', alpha=0.4)
-plt.scatter(t_seg, v_seg, s=20, label='Dados usados no ajuste', color='tab:blue')
+plt.scatter(t, v, s=10, label='Todos os dados', alpha=0.4)
+plt.scatter(
+    t_seg, v_seg,
+    s=30,
+    label='Dados usados no ajuste',
+    color='tab:purple',        # 👈 cor alterada
+    edgecolors='black',        # 👈 contorno opcional para destacar
+    linewidths=0.5
+)
 plt.plot(t_model, v_model, 'r', label=f'Reta ajustada (curve_fit)\n v = {a_fit:.3f} t + {b_fit:.3f}\nR² = {r2:.4f}')
 plt.axvline(t_start, color='gray', linestyle='--', alpha=0.7)
 plt.axvline(t_end, color='gray', linestyle='--', alpha=0.7)
 plt.xlabel('Tempo (s)')
 plt.ylabel('Velocidade (m/s)')
-plt.title(f'Ajuste Linear com curve_fit (Intervalo {t_start}s – {t_end}s)')
+plt.title(f'Coastdown com Ajuste Linear')
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
+
+plt.savefig("coastdown_fit.eps", format='eps', dpi=300)
 plt.show()
 
 # ------------------ Resultados ------------------
